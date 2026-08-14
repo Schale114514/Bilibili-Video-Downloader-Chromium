@@ -33,7 +33,8 @@
 
 ## ✨ 功能特性
 
--  **右下角浮动按钮**：视频页（`/video/`）与番剧页（`/bangumi/play/`）自动出现，一键打开下载面板
+-  **右下角浮动按钮**：普通视频页（`/video/`）、番剧 / 影视 / 纪录片播放页（`/bangumi/play/`）与课程页自动出现，一键打开下载面板
+-  **番剧 / 影视 / 纪录片支持**：通过 `epInfo` / pgc 接口识别 `ep` / `ss` 页面，已购买或开通大会员即可下载（标题自动合并为“剧集名 - 单集名”）
 -  **清晰度选择**：360P / 480P / 720P / 1080P / 1080P60 / 4K / 8K 等（以视频实际提供为准，
   高清晰度需要登录 / 大会员）
 -  **编码选择**：同一清晰度存在多种编码时，可选 AVC(H.264) / HEVC(H.265) / AV1，
@@ -86,11 +87,13 @@ bilibili-downloader/
 | --- | --- |
 | 视频信息（标题 / 分P / cid） | `GET https://api.bilibili.com/x/web-interface/view?bvid=...` |
 | 普通视频播放地址 | `GET https://api.bilibili.com/x/player/playurl?bvid=...&cid=...&qn=127&fnval=4048&fourk=1` |
-| 番剧 / 影视播放地址 | `GET https://api.bilibili.com/pgc/player/web/playurl?ep_id=...&qn=127&fnval=4048&fourk=1` |
+| 番剧 / 影视 / 纪录片播放地址 | `GET https://api.bilibili.com/pgc/player/web/playurl?ep_id=...&qn=127&fnval=4048&fourk=1` |
+| 番剧 / 影视 / 纪录片剧集信息 | `GET https://api.bilibili.com/pgc/view/web/season?ep_id=...`（或 `season_id=...`） |
 
 - `fnval=4048` 请求 DASH 分片流（含 4K / 8K / AV1 / 杜比等信息）
 - `qn=127` 请求尽可能高的清晰度，再根据返回的 `support_formats` 过滤出实际可用的选项
-- 页面数据优先取自 `window.__INITIAL_STATE__`（免请求、更快），缺失时回退到接口
+- 页面数据优先取自 `window.__INITIAL_STATE__`（普通视频用 `videoData`，番剧 / 影视 / 纪录片
+  用 `epInfo`，免请求、更快），缺失时回退到接口
 
 ### 2. DASH 分片流
 
@@ -172,6 +175,7 @@ node test/muxer.test.mjs
 
 | 问题 | 说明 |
 | --- | --- |
+| 电影 / 纪录片 / 番剧页提示“未识别到当前视频页面” | 旧版本仅支持普通视频页。请确认已加载最新版本（扩展页点刷新）；`/bangumi/play/ep|ss...` 页面现已支持，已购买或大会员可下载 |
 | 只能选到低清晰度 | 高清晰度需要登录 B 站账号；大会员专属清晰度需要大会员，请先在网页端登录 |
 | 提示“获取播放地址失败” | 可能未登录、视频为会员专享或受地区限制 |
 | 合并失败，改为分别保存 | 极少数特殊编码/异常流可能无法合并，扩展会自动降级为“视频+音频两个文件” |

@@ -10,7 +10,7 @@
   if (window.__BDG_INSTALLED__) return;
   window.__BDG_INSTALLED__ = true;
 
-  const IS_VIDEO_PAGE = /^\/(video|bangumi\/play)\//.test(location.pathname);
+  const IS_VIDEO_PAGE = /^\/(video|bangumi\/play|cheese\/play)\//.test(location.pathname);
   if (!IS_VIDEO_PAGE) return;
 
   /* ---------------- 常量 ---------------- */
@@ -84,14 +84,41 @@
     return m ? m[1] : null;
   }
 
+  // 解析番剧/影视/纪录片播放页 URL：/bangumi/play/ep123 或 /bangumi/play/ss123
+  function parsePgcFromUrl() {
+    const m = location.pathname.match(/\/bangumi\/play\/(ep|ss)(\d+)/);
+    return m ? { type: m[1], id: +m[2] } : null;
+  }
+
+  // 番剧/影视/纪录片：组合标题（剧集名 - 单集名）
+  function pgcTitle(media, ep) {
+    const epTitle = (ep && (ep.long_title || ep.title)) || '';
+    const seriesTitle = (media && (media.title || media.media_title)) || '';
+    if (seriesTitle && epTitle) return seriesTitle + ' - ' + epTitle;
+    return seriesTitle || epTitle || '未知标题';
+  }
+
   async function loadInfo() {
     const st = window.__INITIAL_STATE__;
+
+    // 1) 普通视频页：window.__INITIAL_STATE__.videoData
     if (st && st.videoData) {
       const vd = st.videoData;
       const pages = (vd.pages && vd.pages.length ? vd.pages : [{ cid: vd.cid, page: 1, part: vd.title, duration: vd.duration }])
         .map((p) => ({ cid: p.cid, page: p.page, part: p.part || ('P' + p.page), duration: p.duration }));
       return { bvid: vd.bvid, aid: vd.aid, cid: vd.cid, title: vd.title || '未知标题', pages };
     }
+
+    // 2) 番剧/影视/纪录片播放页：window.__INITIAL_STATE__.epInfo（已购买/大会员可直接解析）
+    if (st && st.epInfo) {
+      const ep = st.epInfo;
+      const media = st.mediaInfo || {};
+      const epTitle = ep.long_title || ep.title || '';
+      const pages = [{ cid: ep.cid, page: 1, part: epTitle || media.title || 'P1', duration: ep.duration || 0 }];
+      return { bvid: ep.bvid || null, aid: ep.aid || null, cid: ep.cid, title: pgcTitle(media, ep), pages, epId: ep.id };
+    }
+
+    // 3) 普通视频 URL 回退：/video/BV...
     const bvid = currentBvid();
     if (bvid) {
       const j = await apiGet('https://api.bilibili.com/x/web-interface/view?bvid=' + bvid);
@@ -101,14 +128,31 @@
         .map((p) => ({ cid: p.cid, page: p.page, part: p.part || ('P' + p.page), duration: p.duration }));
       return { bvid: d.bvid, aid: d.aid, cid: d.cid, title: d.title || '未知标题', pages };
     }
+
+    // 4) 番剧/影视/纪录片 URL 回退：通过 pgc 接口查询剧集信息
+    const pgc = parsePgcFromUrl();
+    if (pgc) {
+      const j = await apiGet('https://api.bilibili.com/pgc/view/web/season?' + (pgc.type === 'ep' ? 'ep_id=' + pgc.id : 'season_id=' + pgc.id));
+      if (j.code !== 0) throw new Error('获取影视信息失败：' + (j.message || j.code));
+      const d = j.result || j.data || {};
+      let ep = null;
+      if (pgc.type === 'ep') ep = (d.episodes || []).find((e) => e.id === pgc.id);
+      if (!ep) ep = (d.episodes || [])[0];
+      if (!ep) throw new Error('未找到该集信息，请确认已购买或开通大会员');
+      const epTitle = ep.long_title || ep.title || '';
+      const pages = [{ cid: ep.cid, page: 1, part: epTitle || d.title || 'P1', duration: ep.duration || 0 }];
+      return { bvid: ep.bvid || null, aid: ep.aid || null, cid: ep.cid, title: pgcTitle(d, ep), pages, epId: pgc.type === 'ep' ? pgc.id : (ep.id || null) };
+    }
+
     throw new Error('未识别到当前视频页面');
   }
 
   async function loadPlayurl(info, cid) {
-    const st = window.__INITIAL_STATE__;
     let j;
-    if (st && st.epInfo && /^\/bangumi\//.test(location.pathname)) {
-      j = await apiGet('https://api.bilibili.com/pgc/player/web/playurl?ep_id=' + st.epInfo.id + '&qn=127&fnval=4048&fourk=1&platform=pc');
+    if (info.epId) {
+      // 番剧/影视/纪录片：pgc 播放地址接口（需登录/购买）
+      // 注意：pgc 系接口返回的数据在 result 字段（普通视频接口才是 data）
+      j = await apiGet('https://api.bilibili.com/pgc/player/web/playurl?ep_id=' + info.epId + '&qn=127&fnval=4048&fourk=1&platform=pc');
     } else if (info.bvid) {
       j = await apiGet('https://api.bilibili.com/x/player/playurl?bvid=' + info.bvid + '&cid=' + cid + '&qn=127&fnval=4048&fourk=1&platform=pc');
     } else if (info.aid) {
@@ -117,10 +161,13 @@
       throw new Error('无法构造播放地址');
     }
     if (j.code !== 0) throw new Error('获取播放地址失败：' + (j.message || j.code));
-    return j.data;
+    const payload = j.result || j.data;
+    if (!payload) throw new Error('获取播放地址失败：响应数据为空');
+    return payload;
   }
 
   function buildQualityList(data) {
+    if (!data) throw new Error('播放地址数据为空');
     const dash = data.dash;
     const dashVids = dash ? dash.video : [];
     const durl = data.durl || [];
@@ -643,7 +690,8 @@
     if (state.open) closePanel();
     else openPanel();
   });
-  el('bdgClose').addEventListener('click', closePanel);
+  el('bdgClose').addEventListener('click', (e) => { e.stopPropagation(); closePanel(); });
+  el('bdgClose').addEventListener('pointerdown', (e) => { e.stopPropagation(); });
   el('bdgPart').addEventListener('change', async (e) => {
     const page = +e.target.value;
     try {
@@ -657,6 +705,26 @@
   el('bdgCancel').addEventListener('click', () => {
     if (state.abortCtl) state.abortCtl.abort();
   });
+
+  // 点击面板外部任意处关闭（capture 阶段：即使关闭按钮被播放器浮层遮挡，点击仍能生效）
+  document.addEventListener('pointerdown', (e) => {
+    if (!state.open) return;
+    if (e.target && root.contains(e.target)) return;
+    closePanel();
+  }, true);
+
+  // ESC 键关闭面板
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.open) closePanel();
+  });
+
+  // 影视/纪录片播放页的播放器浮层常在页面加载后才挂载（同 z-index 时后挂载者在上），
+  // 延迟把我们的根节点移到 <html> 末尾，确保面板始终浮在最上层
+  const bumpZ = () => {
+    try { document.documentElement.appendChild(root); } catch (_) { /* ignore */ }
+  };
+  setTimeout(bumpZ, 1200);
+  window.addEventListener('load', bumpZ);
 
   // 深色模式跟随
   try {
