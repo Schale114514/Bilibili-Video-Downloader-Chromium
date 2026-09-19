@@ -120,14 +120,30 @@ fMP4 → MP4 重封装器，符合 MV3 安全策略（无 eval、无 Worker、�
   `mvhd` / `tkhd` / `mdhd` / `hdlr` / `stbl`（`stsd` / `stts` / `ctts` / `stss` / `stsc` / `stsz` / `stco`）
 - **交错写入**：视频与音频样本交错存放于 `mdat`，通过两遍构建（占位偏移 → 真实偏移）
   保证 `stco` 偏移精确
-- 音视频起始时间自动对齐（必要时插入空 edit list 延迟）
+- **编辑列表**：用 `edts/elst` 的 `media_time` 裁掉 B 帧重排的前导合成偏移，让首帧从 0 时刻开始
 - 合并失败时自动降级为“视频 + 音频两个文件”分别保存
 
-合并器配有合成数据的**结构化自测**（`test/muxer.test.mjs`，66 项断言），覆盖盒结构、
-样本偏移连续性、时长统计、关键帧表、合成时间偏移与样本数据逐字节往返一致性：
+合并器配有合成数据的**结构化自测**（`test/muxer.test.mjs`，89 项断言），覆盖盒结构、
+样本偏移连续性、时长统计、关键帧表、合成时间偏移、`dinf/dref` 盒格式与样本数据逐字节往返一致性：
 
 ```bash
 node test/muxer.test.mjs
+```
+
+> ⚠️ 经验：`mp4box.js` 与 VLC 对结构缺陷相当宽容，**不能**作为 Windows 播放兼容性的判据。
+> 例：`dref` 盒漏写 4 字节 `version+flags` 时，mp4box 照常解析、VLC 照常播放，
+> 但 Windows Media Foundation 会丢弃全部轨道导致“无法播放”。
+> 因此在 Windows 上务必用同一引擎自检：
+
+```powershell
+# 用 Windows 自带播放器同款引擎（Media Foundation）验证产物
+powershell -STA -ExecutionPolicy Bypass -File test/mf-check.ps1 <你的文件.mp4>
+```
+
+真实数据端到端自测（自动下载指定 BV 的视频+音频流并合并校验，需要外网）：
+
+```bash
+node test/realdata.mjs <输出目录> [bvid]
 ```
 
 ### 4. 双通道下载（应对跨域限制）
@@ -183,6 +199,7 @@ node test/muxer.test.mjs
 | 提示“获取播放地址失败” | 可能未登录、视频为会员专享或受地区限制 |
 | 合并失败，改为分别保存 | 极少数特殊编码/异常流可能无法合并，扩展会自动降级为“视频+音频两个文件” |
 | 合并后播放器无声音或无法播放 | 旧版本（≤1.0.4）的合并缺陷：B站视频流时长写在 `mvex/trex` 默认值里、源 ftyp 带 `dash/msix` 分片流品牌。1.0.5 已修复：解析 trex 默认时长/关键帧标志、输出标准 MP4 品牌、支持 4GB 以上大文件（co64/64位 mdat）、B帧负偏移用 ctts v1 |
+| Windows 自带播放器仍提示无法播放 | 1.0.6 修复了根因：`dinf/dref` 盒漏写 4 字节 version+flags，导致 `entry_count` 被解析成错误值（结构性非法盒）。Media Foundation 严格校验会因此丢弃全部轨道；VLC/mp4box 宽容所以能播。同时补上了编辑列表（裁剪 B 帧前导偏移） |
 | 下载很慢 | 受 B 站 CDN 或宽带服务商的速度影响；直连被拦截时会自动切换到后台通道重试 |
 | 403 / 412 错误 | 风控触发：请先正常打开视频页刷新一次再下载、稍后再试或更换浏览器 |
 | 提示“Failed to fetch” | 媒体 CDN 跨域限制导致，扩展已内置后台通道与备用地址自动重试；请先尝试更换浏览器，若仍失败，请将面板日志反馈到 Issues |
