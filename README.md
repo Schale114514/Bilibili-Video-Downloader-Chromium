@@ -152,6 +152,12 @@ powershell -STA -ExecutionPolicy Bypass -File test/mf-check.ps1 <你的文件.mp
 node test/realdata.mjs <输出目录> [bvid]
 ```
 
+发布前静态检查（捕获 `xxx is not defined` 这类只有运行时才暴露的调用错误）：
+
+```bash
+node test/lint-identifiers.mjs content.js background.js lib/muxer.js
+```
+
 ### 4. 双通道下载（应对跨域限制）
 
 媒体流位于 `*.bilivideo.com` 等 CDN，页面直连可能受 CORS 限制：
