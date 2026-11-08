@@ -7,7 +7,7 @@
 [![Manifest V3](https://img.shields.io/badge/Manifest%20V3-MV3-8A2BE2)](https://developer.chrome.com/docs/extensions/develop/migrate)
 [![JavaScript](https://img.shields.io/badge/Language-JavaScript-yellow)](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen)]()
-[![License](https://img.shields.io/badge/License-MIT-blue)]()
+[![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange)]()
 
 **在 B 站视频页面右下角一键下载视频，即可下载视频或音频。**
 
@@ -235,6 +235,13 @@ node test/lint-identifiers.mjs content.js background.js lib/muxer.js
 
 ## 📄 开源协议
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 **[PolyForm Noncommercial License 1.0.0](LICENSE)** 开源 —— **仅允许非商业用途**
+（个人学习、研究、实验、娱乐、业余项目，以及慈善 / 教育 / 公共科研 / 公共安全与卫生 /
+环保 / 政府机构的使用）。**禁止任何商业目的的使用**（包括在商业活动中使用、为商品或服务
+提供、用于广告营销，以及以开发商业产品或服务为目的的研究等）。
+
+> ⚠️ 授权变更说明：早期版本曾以 MIT 许可发布。MIT 许可一经授予不可撤销，因此**已经通过
+> 旧版本获得代码的人仍可按 MIT 条款使用旧版本**；本协议变更为**自本版本起的后续版本**生效。
+> 如需将本项目用于商业用途，请另行取得授权。
 
 如果本项目对你有帮助，欢迎 ⭐ Star 支持！
